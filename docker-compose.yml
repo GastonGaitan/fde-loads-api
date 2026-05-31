@@ -5,8 +5,10 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: loads
-    ports:
-      - "5432:5432"
+    # No publicamos 5432 al host: el API se conecta por la red interna de compose.
+    # Si necesitás inspeccionar la DB desde el host, descomentá y usá un puerto libre:
+    # ports:
+    #   - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -31,7 +33,7 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/loads
       API_KEY: ${API_KEY:-dev-secret-change-me}
     ports:
-      - "8000:8000"
+      - "8010:8000"
     depends_on:
       db:
         condition: service_healthy
