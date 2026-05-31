@@ -53,5 +53,27 @@ services:
     depends_on:
       - api
 
+  # Reverse proxy with automatic HTTPS. Terminates TLS for both the API
+  # (consumed by HappyRobot) and the dashboard (consumed by humans).
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      API_DOMAIN: ${API_DOMAIN:-api.195-35-16-20.nip.io}
+      DASH_DOMAIN: ${DASH_DOMAIN:-dash.195-35-16-20.nip.io}
+      ACME_EMAIL: ${ACME_EMAIL:-admin@example.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+      - dashboard
+
 volumes:
   pgdata:
+  caddy_data:
+  caddy_config:

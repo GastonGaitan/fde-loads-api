@@ -1,0 +1,21 @@
+# Reverse proxy with automatic HTTPS (Let's Encrypt) in front of the API and
+# dashboard. Domains come from the environment (see .env). Using nip.io lets us
+# get real certificates against a bare IP without buying a domain, e.g.
+#   API_DOMAIN=api.195-35-16-20.nip.io
+#   DASH_DOMAIN=dash.195-35-16-20.nip.io
+#
+# For a purely local / no-DNS setup, point the domains at the IP and Caddy will
+# fall back to its internal self-signed CA (browser will warn — acceptable per
+# the challenge: "self-signed locally is fine").
+
+{
+	email {$ACME_EMAIL}
+}
+
+{$API_DOMAIN} {
+	reverse_proxy api:8000
+}
+
+{$DASH_DOMAIN} {
+	reverse_proxy dashboard:8501
+}
