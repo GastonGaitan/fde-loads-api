@@ -189,6 +189,18 @@ def log_call(req: CallCreate, db: Session = Depends(get_db)):
     return call
 
 
+@app.get(
+    "/calls",
+    response_model=list[CallOut],
+    dependencies=[Depends(require_api_key)],
+)
+def list_calls(
+    limit: int = Query(200, ge=1, le=1000),
+    db: Session = Depends(get_db),
+):
+    return db.query(Call).order_by(Call.created_at.desc()).limit(limit).all()
+
+
 @app.get("/metrics", dependencies=[Depends(require_api_key)])
 def metrics(db: Session = Depends(get_db)):
     """Aggregated KPIs for the dashboard (Objective 2)."""
