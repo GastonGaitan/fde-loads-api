@@ -32,6 +32,8 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/loads
       API_KEY: ${API_KEY:-dev-secret-change-me}
+      NEGOTIATION_MAX_MARGIN: ${NEGOTIATION_MAX_MARGIN:-0.15}
+      NEGOTIATION_MAX_ROUNDS: ${NEGOTIATION_MAX_ROUNDS:-3}
     ports:
       - "8010:8000"
     depends_on:

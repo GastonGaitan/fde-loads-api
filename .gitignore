@@ -9,8 +9,10 @@ __pycache__/
 *$py.class
 *.egg-info/
 .venv/
+.venv_test/
 venv/
 env/
+*.db
 
 # IDE / tooling
 .vscode/
