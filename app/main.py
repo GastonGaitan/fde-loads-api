@@ -4,8 +4,14 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .db import Base, engine, get_db
-from .models import Load, NegotiationRound
-from .schemas import NegotiateRequest, NegotiateResponse, SearchResponse
+from .models import Call, Load, NegotiationRound
+from .schemas import (
+    CallCreate,
+    CallOut,
+    NegotiateRequest,
+    NegotiateResponse,
+    SearchResponse,
+)
 
 API_KEY = os.getenv("API_KEY", "dev-secret-change-me")
 
@@ -137,3 +143,84 @@ def negotiate(req: NegotiateRequest, db: Session = Depends(get_db)):
         final=final,
         message=message,
     )
+
+
+@app.post(
+    "/calls",
+    response_model=CallOut,
+    dependencies=[Depends(require_api_key)],
+)
+def log_call(req: CallCreate, db: Session = Depends(get_db)):
+    """Persist a post-call record. Rate and round data are joined from the
+    authoritative negotiation_rounds table by call_id, so the agent never has
+    to report (and possibly hallucinate) the final numbers."""
+    rounds = (
+        db.query(NegotiationRound)
+        .filter(NegotiationRound.call_id == req.call_id)
+        .order_by(NegotiationRound.round_number)
+        .all()
+    )
+    agreed = False
+    final_rate = None
+    load_id = req.load_id
+    for r in rounds:
+        if r.load_id:
+            load_id = r.load_id
+        if r.decision == "accept":
+            agreed = True
+            final_rate = r.agreed_rate
+
+    call = Call(
+        call_id=req.call_id,
+        mc_number=req.mc_number,
+        carrier_name=req.carrier_name,
+        eligible=req.eligible,
+        load_id=load_id,
+        agreed=agreed,
+        final_rate=final_rate,
+        negotiation_rounds=len(rounds),
+        outcome=req.outcome,
+        sentiment=req.sentiment,
+        transcript=req.transcript,
+    )
+    db.add(call)
+    db.commit()
+    db.refresh(call)
+    return call
+
+
+@app.get("/metrics", dependencies=[Depends(require_api_key)])
+def metrics(db: Session = Depends(get_db)):
+    """Aggregated KPIs for the dashboard (Objective 2)."""
+    total = db.query(Call).count()
+    deals = db.query(Call).filter(Call.agreed.is_(True)).count()
+
+    outcomes = dict(
+        db.query(Call.outcome, func.count(Call.id)).group_by(Call.outcome).all()
+    )
+    sentiments = dict(
+        db.query(Call.sentiment, func.count(Call.id)).group_by(Call.sentiment).all()
+    )
+
+    avg_rounds = (
+        db.query(func.avg(Call.negotiation_rounds))
+        .filter(Call.agreed.is_(True))
+        .scalar()
+    )
+    avg_rate = (
+        db.query(func.avg(Call.final_rate)).filter(Call.agreed.is_(True)).scalar()
+    )
+
+    return {
+        "total_calls": total,
+        "deals_booked": deals,
+        "conversion_rate": round(deals / total, 4) if total else 0.0,
+        "outcomes": {(k or "unknown"): v for k, v in outcomes.items()},
+        "sentiments": {(k or "unknown"): v for k, v in sentiments.items()},
+        "avg_negotiation_rounds_for_deals": (
+            round(float(avg_rounds), 2) if avg_rounds is not None else None
+        ),
+        "avg_final_rate_for_deals": (
+            round(float(avg_rate), 2) if avg_rate is not None else None
+        ),
+    }

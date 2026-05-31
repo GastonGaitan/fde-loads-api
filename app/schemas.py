@@ -42,3 +42,31 @@ class NegotiateResponse(BaseModel):
     agreed_rate: Optional[float] = None
     final: bool = False
     message: str
+
+
+class CallCreate(BaseModel):
+    call_id: str
+    mc_number: Optional[str] = None
+    carrier_name: Optional[str] = None
+    eligible: Optional[bool] = None
+    load_id: Optional[str] = None
+    outcome: Optional[str] = None
+    sentiment: Optional[str] = None
+    transcript: Optional[str] = None
+
+
+class CallOut(BaseModel):
+    id: int
+    call_id: str
+    mc_number: Optional[str] = None
+    carrier_name: Optional[str] = None
+    eligible: Optional[bool] = None
+    load_id: Optional[str] = None
+    agreed: bool
+    final_rate: Optional[float] = None
+    negotiation_rounds: int
+    outcome: Optional[str] = None
+    sentiment: Optional[str] = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
