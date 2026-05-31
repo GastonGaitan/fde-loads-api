@@ -1,5 +1,6 @@
 import json
 import os
+import urllib.request
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -9,6 +10,7 @@ from .models import Call, Load, NegotiationRound
 from .schemas import (
     CallCreate,
     CallOut,
+    CarrierVerifyResponse,
     NegotiateRequest,
     NegotiateResponse,
     SearchResponse,
@@ -20,6 +22,13 @@ API_KEY = os.getenv("API_KEY", "dev-secret-change-me")
 NEGOTIATION_MAX_MARGIN = float(os.getenv("NEGOTIATION_MAX_MARGIN", "0.15"))
 # Max number of counter-offers the agent may make before walking away.
 NEGOTIATION_MAX_ROUNDS = int(os.getenv("NEGOTIATION_MAX_ROUNDS", "3"))
+
+# FMCSA carrier lookup (server-side wrapper).
+FMCSA_API_KEY = os.getenv("FMCSA_API_KEY", "")
+FMCSA_DOCKET_URL = os.getenv(
+    "FMCSA_DOCKET_URL",
+    "https://mobile.fmcsa.dot.gov/qc/services/carriers/docket-number",
+)
 
 app = FastAPI(title="Acme Loads API", version="0.1.0")
 
@@ -62,6 +71,55 @@ def search_loads(
 
     loads = query.limit(limit).all()
     return SearchResponse(count=len(loads), loads=loads)
+
+
+@app.get(
+    "/carriers/verify",
+    response_model=CarrierVerifyResponse,
+    dependencies=[Depends(require_api_key)],
+)
+def verify_carrier(mc: str = Query(..., description="Carrier MC / docket number")):
+    """Server-side wrapper over the FMCSA QCMobile API. Returns a flat, typed
+    result so the voice agent gets clean fields (eligible, carrier_name, ...)
+    instead of parsing raw FMCSA JSON in the workflow. Always returns 200; any
+    failure is reported in the `error` field with eligible=False."""
+    digits = "".join(c for c in mc if c.isdigit())
+    result = CarrierVerifyResponse(mc_number=digits, eligible=False)
+    if not digits:
+        result.error = "invalid MC number"
+        return result
+
+    url = f"{FMCSA_DOCKET_URL}/{digits}?webKey={FMCSA_API_KEY}"
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={
+                "Accept": "application/json",
+                "User-Agent": "Mozilla/5.0 (compatible; AcmeLogistics/1.0)",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=15) as r:
+            payload = json.loads(r.read().decode("utf-8"))
+    except Exception as exc:  # noqa: BLE001
+        result.error = f"FMCSA lookup failed: {exc}"
+        return result
+
+    content = payload.get("content")
+    if isinstance(content, list):
+        content = content[0] if content else None
+    carrier = (content or {}).get("carrier") if content else None
+    if not carrier:
+        result.error = "carrier not found"
+        return result
+
+    allowed = str(carrier.get("allowedToOperate") or "N")
+    status = str(carrier.get("statusCode") or "I")
+    result.carrier_name = str(carrier.get("legalName") or "Unknown")
+    result.dot_number = str(carrier.get("dotNumber") or "")
+    result.allowed_to_operate = allowed
+    result.status_code = status
+    result.eligible = allowed == "Y" and status == "A"
+    return result
 
 
 def _round_to(value: float, step: int = 25) -> float:

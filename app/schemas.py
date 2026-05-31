@@ -44,6 +44,16 @@ class NegotiateResponse(BaseModel):
     message: str
 
 
+class CarrierVerifyResponse(BaseModel):
+    mc_number: str
+    eligible: bool
+    carrier_name: str = ""
+    dot_number: str = ""
+    status_code: str = ""
+    allowed_to_operate: str = ""
+    error: str = ""
+
+
 class CallCreate(BaseModel):
     # HappyRobot sends typed values (preserveDataTypes), so e.g. mc_number can
     # arrive as an int and transcript as a list of turns. Coerce numbers to str

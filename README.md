@@ -48,6 +48,7 @@ All endpoints (except `/health`) require the `X-API-Key` header.
 |--------|------------------|---------------------------------------------------------|
 | GET    | `/health`        | Liveness check (no auth)                                 |
 | GET    | `/loads/search`  | `origin`, `destination`, `equipment_type` → matching loads |
+| GET    | `/carriers/verify` | `mc` → FMCSA eligibility (flat: `eligible`, `carrier_name`, …) |
 | POST   | `/negotiate`     | `{call_id, load_id, carrier_offer}` → accept / counter / reject (backend-controlled ceiling & rounds) |
 | POST   | `/calls`         | Log a call; joins final rate + rounds from negotiation by `call_id` |
 | GET    | `/calls`         | List recent calls                                       |
