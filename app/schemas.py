@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 from pydantic import BaseModel
 
 
@@ -45,6 +45,11 @@ class NegotiateResponse(BaseModel):
 
 
 class CallCreate(BaseModel):
+    # HappyRobot sends typed values (preserveDataTypes), so e.g. mc_number can
+    # arrive as an int and transcript as a list of turns. Coerce numbers to str
+    # and accept any shape for transcript (serialized to JSON in the endpoint).
+    model_config = {"coerce_numbers_to_str": True}
+
     call_id: str
     mc_number: Optional[str] = None
     carrier_name: Optional[str] = None
@@ -52,7 +57,7 @@ class CallCreate(BaseModel):
     load_id: Optional[str] = None
     outcome: Optional[str] = None
     sentiment: Optional[str] = None
-    transcript: Optional[str] = None
+    transcript: Optional[Any] = None
 
 
 class CallOut(BaseModel):

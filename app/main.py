@@ -1,3 +1,4 @@
+import json
 import os
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from sqlalchemy import func
@@ -170,6 +171,10 @@ def log_call(req: CallCreate, db: Session = Depends(get_db)):
             agreed = True
             final_rate = r.agreed_rate
 
+    transcript = req.transcript
+    if transcript is not None and not isinstance(transcript, str):
+        transcript = json.dumps(transcript, ensure_ascii=False)
+
     call = Call(
         call_id=req.call_id,
         mc_number=req.mc_number,
@@ -181,7 +186,7 @@ def log_call(req: CallCreate, db: Session = Depends(get_db)):
         negotiation_rounds=len(rounds),
         outcome=req.outcome,
         sentiment=req.sentiment,
-        transcript=req.transcript,
+        transcript=transcript,
     )
     db.add(call)
     db.commit()
