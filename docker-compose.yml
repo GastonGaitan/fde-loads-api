@@ -55,8 +55,14 @@ services:
 
   # Reverse proxy with automatic HTTPS. Terminates TLS for both the API
   # (consumed by HappyRobot) and the dashboard (consumed by humans).
+  #
+  # Optional ("edge" profile): only starts with `docker compose --profile edge up`.
+  # On a host that already runs a reverse proxy on :80/:443 (shared VPS), leave
+  # this off and route the two subdomains from the existing proxy to :8010/:8501.
+  # On a dedicated host with :80/:443 free, enable it for self-contained HTTPS.
   caddy:
     image: caddy:2-alpine
+    profiles: ["edge"]
     restart: unless-stopped
     ports:
       - "80:80"

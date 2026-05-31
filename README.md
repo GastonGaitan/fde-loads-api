@@ -94,19 +94,31 @@ docker compose up -d --build
 
 ### HTTPS
 
-`caddy` obtains real Let's Encrypt certificates automatically for `API_DOMAIN`
-and `DASH_DOMAIN`. Using **nip.io** (`<ip-with-dashes>.nip.io`) gives a valid
-hostname for a bare IP without buying a domain.
+There are two ways to get HTTPS, depending on the host:
 
-Requirements: ports **80** and **443** open on the host, and the domains
-resolving to it (nip.io does this automatically).
+**A. Dedicated host (ports 80/443 free) — bundled Caddy.**
+Start the optional `caddy` service, which obtains real Let's Encrypt
+certificates automatically for `API_DOMAIN` and `DASH_DOMAIN`:
 
-After HTTPS is verified, point the HappyRobot `LOADS_API_URL` variable at
-`https://$API_DOMAIN` and (optionally) stop publishing the plain `8010`/`8501`
-ports so traffic only flows through Caddy.
+```bash
+docker compose --profile edge up -d --build
+```
 
-> No open 80/443 or no DNS? Set the domains to the bare IP and Caddy falls back
-> to a self-signed internal CA (browser warning is expected).
+Using **nip.io** (`<ip-with-dashes>.nip.io`) gives a valid hostname for a bare
+IP without buying a domain. Requires ports **80** and **443** open on the host.
+
+**B. Shared host (already runs a reverse proxy on 80/443).**
+Leave the `caddy` service off (it is gated behind the `edge` profile, so a plain
+`docker compose up -d` skips it) and add two server blocks to the existing
+proxy, terminating TLS and forwarding to the published container ports:
+
+```
+api.<ip-with-dashes>.nip.io   →  http://127.0.0.1:8010
+dash.<ip-with-dashes>.nip.io  →  http://127.0.0.1:8501
+```
+
+In both cases, once HTTPS is verified, point the HappyRobot `LOADS_API_URL`
+variable at `https://api.<...>.nip.io`.
 
 ## Security
 
