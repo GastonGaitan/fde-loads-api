@@ -45,9 +45,9 @@ services:
   dashboard:
     build: ./dashboard
     environment:
-      # Reaches the API over the internal compose network.
+      # Reaches the API over the internal compose network. No API key here:
+      # access is gated by the key the user pastes in the login screen.
       API_BASE_URL: http://api:8000
-      API_KEY: ${API_KEY:-dev-secret-change-me}
     ports:
       - "8501:8501"
     depends_on:

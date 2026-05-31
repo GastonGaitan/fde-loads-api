@@ -3,6 +3,10 @@
 A standalone Streamlit app (Objective 2). It does NOT touch the database
 directly: it reads the FastAPI endpoints GET /metrics and GET /calls over HTTP,
 so the API stays the single source of truth.
+
+Access is gated by the API key: the user must paste a valid X-API-Key to get in,
+and that same key is used for every backend request. The dashboard itself stores
+no secret.
 """
 import os
 
@@ -12,9 +16,6 @@ import requests
 import streamlit as st
 
 API_BASE = os.getenv("API_BASE_URL", "http://localhost:8010").rstrip("/")
-API_KEY = os.getenv("API_KEY", "dev-secret-change-me")
-HEADERS = {"X-API-Key": API_KEY}
-
 SENTIMENT_COLORS = {"positive": "#2ecc71", "neutral": "#95a5a6", "negative": "#e74c3c"}
 
 st.set_page_config(
@@ -24,35 +25,76 @@ st.set_page_config(
 )
 
 
+def validate_key(key: str):
+    """Validate the key against an authenticated endpoint. Returns (ok, error)."""
+    if not key:
+        return False, "Please enter an API key."
+    try:
+        r = requests.get(
+            f"{API_BASE}/metrics", headers={"X-API-Key": key}, timeout=10
+        )
+    except Exception as exc:  # noqa: BLE001
+        return False, f"Could not reach the API at {API_BASE}: {exc}"
+    if r.status_code == 200:
+        return True, None
+    if r.status_code in (401, 403):
+        return False, "Invalid API key."
+    return False, f"Unexpected response from API: HTTP {r.status_code}"
+
+
+# ---- Login gate ------------------------------------------------------------
+if "api_key" not in st.session_state:
+    st.title("🔒 Acme Carrier Sales — Metrics")
+    st.caption("Enter your API key to access the dashboard.")
+    with st.form("login"):
+        key_input = st.text_input("API key", type="password", placeholder="X-API-Key")
+        submitted = st.form_submit_button("Enter")
+    if submitted:
+        ok, err = validate_key(key_input)
+        if ok:
+            st.session_state.api_key = key_input
+            st.rerun()
+        else:
+            st.error(err)
+    st.stop()
+
+API_KEY = st.session_state.api_key
+
+
 @st.cache_data(ttl=30)
-def fetch(path: str):
-    r = requests.get(f"{API_BASE}{path}", headers=HEADERS, timeout=10)
+def fetch(path: str, key: str):
+    r = requests.get(f"{API_BASE}{path}", headers={"X-API-Key": key}, timeout=10)
     r.raise_for_status()
     return r.json()
 
 
+# ---- Sidebar ---------------------------------------------------------------
+with st.sidebar:
+    st.success("Authenticated")
+    if st.button("🔄 Refresh data"):
+        st.cache_data.clear()
+    if st.button("🔒 Log out"):
+        st.cache_data.clear()
+        del st.session_state["api_key"]
+        st.rerun()
+
 st.title("🚚 Acme Logistics — Inbound Carrier Sales")
 st.caption(f"Use-case metrics · source: {API_BASE}")
 
-if st.button("🔄 Refresh data"):
-    st.cache_data.clear()
-
 try:
-    metrics = fetch("/metrics")
-    calls = pd.DataFrame(fetch("/calls"))
+    metrics = fetch("/metrics", API_KEY)
+    calls = pd.DataFrame(fetch("/calls", API_KEY))
 except Exception as exc:  # noqa: BLE001
-    st.error(f"Could not reach the API at {API_BASE}.\n\n{exc}")
+    st.error(f"Could not load data from the API.\n\n{exc}")
     st.stop()
 
 # ---- KPI row ---------------------------------------------------------------
-total = metrics["total_calls"]
-deals = metrics["deals_booked"]
 avg_rate = metrics["avg_final_rate_for_deals"]
 avg_rounds = metrics["avg_negotiation_rounds_for_deals"]
 
 k1, k2, k3, k4, k5 = st.columns(5)
-k1.metric("Total calls", total)
-k2.metric("Deals booked", deals)
+k1.metric("Total calls", metrics["total_calls"])
+k2.metric("Deals booked", metrics["deals_booked"])
 k3.metric("Conversion rate", f"{metrics['conversion_rate'] * 100:.1f}%")
 k4.metric("Avg deal rate", f"${avg_rate:,.0f}" if avg_rate else "—")
 k5.metric("Avg rounds / deal", f"{avg_rounds:.1f}" if avg_rounds else "—")
@@ -93,7 +135,7 @@ with col2:
     else:
         st.info("No sentiment recorded yet.")
 
-# ---- Deals by load + final rates ------------------------------------------
+# ---- Deals by load ---------------------------------------------------------
 if not calls.empty:
     booked = calls[calls["agreed"] == True]  # noqa: E712
     if not booked.empty:
