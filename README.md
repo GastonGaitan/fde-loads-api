@@ -117,6 +117,16 @@ api.<ip-with-dashes>.nip.io   →  http://127.0.0.1:8010
 dash.<ip-with-dashes>.nip.io  →  http://127.0.0.1:8501
 ```
 
+A ready nginx example is in `deploy/nginx.fde-loads.conf.example`; enable it and
+get certificates with:
+
+```bash
+sudo cp deploy/nginx.fde-loads.conf.example /etc/nginx/sites-available/fde-loads.conf
+sudo ln -s /etc/nginx/sites-available/fde-loads.conf /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+sudo certbot --nginx -d api.<ip-with-dashes>.nip.io -d dash.<ip-with-dashes>.nip.io
+```
+
 In both cases, once HTTPS is verified, point the HappyRobot `LOADS_API_URL`
 variable at `https://api.<...>.nip.io`.
 
